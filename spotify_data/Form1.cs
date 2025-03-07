@@ -6,6 +6,7 @@ namespace spotify_data
     public partial class Form1 : Form
     {
         private string access_token;
+        private SpotifyClient spotify;
 
         public Form1()
         {
@@ -45,61 +46,61 @@ namespace spotify_data
         }
         private async void DataViewShowData_CellContentClickAsync(object sender, DataGridViewCellEventArgs e)
         {
-            access_token = await token_spotify.AuthenticateAsync();
-            if (string.IsNullOrEmpty(access_token))
+            if (e.RowIndex < 0) return; // Evita que se procese el encabezado
+
+            var selectedRow = DataViewShowData.Rows[e.RowIndex];
+            string trackAlbumId = selectedRow.Cells[0].Value?.ToString();
+
+            if (string.IsNullOrEmpty(trackAlbumId))
             {
-                MessageBox.Show("Error al autenticar con Spotify.");
+                MessageBox.Show("No se pudo obtener el Track Album ID.");
                 return;
             }
-            if (e.RowIndex >= 0) // Verifica que no sea un encabezado
-            {
-                var selectedRow = DataViewShowData.Rows[e.RowIndex];
 
-                // Asegúrate de que la celda no esté vacía y extrae el track_album_id
-                string trackAlbumId = selectedRow.Cells[0].Value?.ToString();
+            // Autenticación con Spotify antes de intentar reproducir
+            await AuthenticateSpotifyAsync();
+            await PlaySongAsync(trackAlbumId);
+        }
 
-                if (!string.IsNullOrEmpty(trackAlbumId))
-                {
-                    await PlaySongAsync(trackAlbumId);
-                }
-                else
-                {
-                    MessageBox.Show("No se pudo obtener el Track Album ID.");
-                }
-            }
+        private async Task AuthenticateSpotifyAsync()
+        {
+            if (!string.IsNullOrEmpty(access_token)) return;
+
+            var config = SpotifyClientConfig.CreateDefault();
+            var request = new ClientCredentialsRequest("f5a1692a92bd4cfcb9dc151a361de523", "6841f1e4963c4c1bb5f2a2fda12792f9");
+
+            var response = await new OAuthClient(config).RequestToken(request);
+            access_token = response.AccessToken;
+            spotify = new SpotifyClient(access_token);
         }
 
         private async Task PlaySongAsync(string trackUri)
         {
-            if (string.IsNullOrEmpty(access_token))
+            try
             {
-                access_token = await token_spotify.AuthenticateAsync();
-                if (string.IsNullOrEmpty(access_token))
+                if (spotify == null)
                 {
                     MessageBox.Show("No se pudo autenticar con Spotify.");
                     return;
                 }
-            }
 
-            try
-            {
-                var spotify = new SpotifyClient(access_token);
-                var request = new PlayerResumePlaybackRequest
+                // En lugar de reanudar la reproducción, solo abrimos la canción en Spotify
+                var songUrl = $"https://open.spotify.com/track/{trackUri}";
+
+                // Abre el enlace en el navegador por defecto
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    Uris = new List<string> { trackUri }
-                };
+                    FileName = songUrl,
+                    UseShellExecute = true
+                });
 
-                await spotify.Player.ResumePlayback(request);
-                MessageBox.Show("Reproduciendo canción en Spotify.");
+                MessageBox.Show("Abriendo canción en Spotify.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error al reproducir la canción: " + ex.Message);
+                MessageBox.Show("Error al abrir la canción: " + ex.Message);
             }
         }
-
-      
-
 
     }
 }
